@@ -8,25 +8,27 @@
 <meta name="theme-color" content="#ff66b2"/>
 <link rel="icon" href="icon-192.png">
 <style>
-:root{--glass:rgba(255,255,255,.82);--line:rgba(0,0,0,.08);--accent:#ff66b2;--ink:#1e2329}
-*{box-sizing:border-box}html,body{height:100%}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;color:var(--ink);
-  background:#ff66b2 url('background.jpg') center/cover no-repeat fixed;}
-.topbar{position:sticky;top:0;z-index:10;margin:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--glass);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px}
-.main{padding:12px;display:grid;gap:12px;max-width:1100px;margin:0 auto}
+:root{--glass:rgba(255,255,255,.85);--line:rgba(0,0,0,.08);--accent:#ff66b2;--ink:#1e2329}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;color:var(--ink);background:#ff66b2 url('background.jpg') center/cover no-repeat fixed;}
+.wrap{max-width:980px;margin:0 auto;padding:12px;display:grid;gap:12px}
 .card{background:var(--glass);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px;padding:14px}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--glass);backdrop-filter:blur(12px);border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:12px}
-.sheet .grip{width:42px;height:5px;border-radius:999px;background:#ddd;margin:0 auto 10px;opacity:.8}
-.grid{display:grid;gap:10px;grid-template-columns:repeat(2,1fr)}@media(min-width:900px){.grid{grid-template-columns:repeat(4,1fr)}}
+.header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+h1{font-size:1.1rem;margin:0}
+.grid2{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
 label{font-size:.9rem;color:#374151}
 input,select,textarea{width:100%;background:#fff;border:1px solid #ffd0e6;border-radius:10px;padding:10px 12px;outline:none}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
 .btn{border:1px solid transparent;background:var(--accent);color:#fff;font-weight:700;border-radius:12px;padding:12px 14px;cursor:pointer}
 .btn.secondary{background:#fff;color:#111;border:1px solid #e5e7eb}.btn.ghost{background:transparent;color:#111;border:1px dashed #e5e7eb}
-.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.thumb{border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff}.thumb img{width:100%;display:block}
-canvas{width:100%;max-width:900px;height:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px}
-.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.badge{padding:4px 8px;border:1px solid #e5e7eb;border-radius:999px;background:#fff;font-size:.85rem;color:#374151}
-.footer-spacer{height:340px}
+canvas{width:100%;max-width:960px;height:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.badge{padding:4px 8px;border:1px solid #e5e7eb;border-radius:999px;background:#fff;font-size:.85rem;color:#374151}
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.thumb{border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff}
+.thumb img{width:100%;display:block}
 </style>
 <script>
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(console.error);});}
@@ -35,62 +37,100 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.s
 <script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
-<div class="topbar"><div style="font-weight:800">📸 LuciFoto</div><div id="stat">Načítám moduly…</div></div>
-<main class="main">
-<section class="card">
-  <input id="files" type="file" accept="image/*" capture="environment" multiple/>
-  <div class="gallery" id="gallery" style="margin-top:8px"></div>
-  <canvas id="canvas" width="1080" height="1080"></canvas>
-  <div class="badges">
-    <span class="badge" id="mBadgePx">Měřítko: –</span>
-    <span class="badge" id="mBadgeW">Šířka: –</span>
-    <span class="badge" id="mBadgeH">Výška: –</span>
-  </div>
-  <div class="actions">
-    <button class="btn" id="processBtn">🪄 Zpracovat</button>
-    <button class="btn secondary" id="renderBtn">Vytvořit náhled</button>
-    <button class="btn ghost" id="downloadBtn">Stáhnout fotku</button>
-    <button class="btn ghost" id="exportCsvBtn">Export CSV (Vinted)</button>
-  </div>
-</section>
-<div class="footer-spacer"></div>
-</main>
-<section class="sheet">
-  <div class="grip"></div>
-  <div class="grid">
-    <div><label>Reference měřítka</label>
-      <select id="scaleRef"><option value="a4" selected>A4 list (29,7 × 21 cm)</option><option value="manual">Vlastní páska (zadám délku)</option></select>
+  <div class="wrap">
+    <div class="card header">
+      <h1>📸 LuciFoto</h1>
+      <div id="stat">Načítám moduly…</div>
     </div>
-    <div id="manualLenWrap" style="display:none"><label>Délka pásky (cm)</label><input id="manualLen" type="number" min="5" max="200" step="0.1" placeholder="30"/></div>
 
-    <div><label>Kategorie</label>
-      <select id="kategorie">
-        <option value="">— vyber —</option>
-        <option>tričko</option><option>mikina</option><option>svetr</option><option>bunda</option>
-        <option>kalhoty</option><option>kraťasy</option><option>sukně</option><option>šaty</option><option>boty</option><option>doplněk</option>
-      </select>
+    <div class="card">
+      <div class="actions" style="margin-bottom:10px">
+        <input id="files" type="file" accept="image/*" capture="environment" multiple/>
+        <button class="btn" id="processBtn">🪄 Zpracovat</button>
+        <button class="btn secondary" id="renderBtn">Vytvořit náhled</button>
+        <button class="btn ghost" id="downloadBtn">Stáhnout fotku</button>
+        <button class="btn ghost" id="exportCsvBtn">Export CSV (Vinted)</button>
+      </div>
+      <div class="gallery" id="gallery"></div>
+      <canvas id="canvas" width="1080" height="1080"></canvas>
+      <div class="badges">
+        <span class="badge" id="mBadgePx">Měřítko: –</span>
+        <span class="badge" id="mBadgeW">Šířka: –</span>
+        <span class="badge" id="mBadgeH">Výška: –</span>
+      </div>
     </div>
-    <div><label>Barva</label>
-      <select id="barva">
-        <option value="">— vyber —</option>
-        <option>bílá</option><option>černá</option><option>šedá</option><option>modrá</option><option>červená</option><option>růžová</option>
-        <option>zelená</option><option>béžová</option><option>hnědá</option><option>žlutá</option><option>fialová</option><option>vícebarevná</option>
-      </select>
+
+    <div class="card">
+      <div class="grid2">
+        <div>
+          <label>Reference měřítka</label>
+          <select id="scaleRef">
+            <option value="a4" selected>A4 list (29,7 × 21 cm)</option>
+            <option value="manual">Vlastní páska (zadám délku)</option>
+          </select>
+        </div>
+        <div id="manualLenWrap" style="display:none">
+          <label>Délka pásky (cm)</label>
+          <input id="manualLen" type="number" min="5" max="200" step="0.1" placeholder="30"/>
+        </div>
+
+        <div>
+          <label>Kategorie</label>
+          <select id="kategorie">
+            <option value="">— vyber —</option>
+            <option>tričko</option><option>mikina</option><option>svetr</option><option>bunda</option>
+            <option>kalhoty</option><option>kraťasy</option><option>sukně</option><option>šaty</option><option>boty</option><option>doplněk</option>
+          </select>
+        </div>
+        <div>
+          <label>Barva</label>
+          <select id="barva">
+            <option value="">— vyber —</option>
+            <option>bílá</option><option>černá</option><option>šedá</option><option>modrá</option><option>červená</option><option>růžová</option>
+            <option>zelená</option><option>béžová</option><option>hnědá</option><option>žlutá</option><option>fialová</option><option>vícebarevná</option>
+          </select>
+        </div>
+
+        <div>
+          <label>Velikost</label>
+          <select id="velikost">
+            <option>XS</option><option>S</option><option selected>M</option><option>L</option><option>XL</option><option>XXL</option>
+          </select>
+        </div>
+        <div>
+          <label>Pohlaví</label>
+          <select id="gender">
+            <option value="">— vyber —</option><option>Dámské</option><option>Pánské</option><option>Dětské</option>
+          </select>
+        </div>
+
+        <div>
+          <label>Stav</label>
+          <select id="stav">
+            <option>Nové</option><option>Jako nové</option><option selected>Velmi dobrý</option><option>Dobrý</option><option>Uspokojivý</option>
+          </select>
+        </div>
+        <div>
+          <label>Cena (Kč)</label>
+          <input id="cena" type="number" min="0" step="1" placeholder="180"/>
+        </div>
+
+        <div>
+          <label>Titulek</label>
+          <input id="title" type="text" placeholder="Titulek produktu"/>
+        </div>
+        <div style="grid-column:1 / -1">
+          <label>Popis</label>
+          <textarea id="popis" rows="4" placeholder="Krátký popis položky…"></textarea>
+        </div>
+
+        <div><label>Míra 1</label><input id="mira1" type="text" placeholder="Délka: 45 cm"/></div>
+        <div><label>Míra 2</label><input id="mira2" type="text" placeholder="Šířka: 33 cm"/></div>
+        <div><label>Míra 3</label><input id="mira3" type="text" placeholder="Rukáv: 42 cm"/></div>
+        <div><label>Míra 4</label><input id="mira4" type="text" placeholder="(volitelné)"/></div>
+      </div>
     </div>
-    <div><label>Velikost</label>
-      <select id="velikost"><option>XS</option><option>S</option><option selected>M</option><option>L</option><option>XL</option><option>XXL</option></select>
-    </div>
-    <div><label>Pohlaví</label><select id="gender"><option value="">— vyber —</option><option>Dámské</option><option>Pánské</option><option>Dětské</option></select></div>
-    <div><label>Stav</label><select id="stav"><option>Nové</option><option>Jako nové</option><option selected>Velmi dobrý</option><option>Dobrý</option><option>Uspokojivý</option></select></div>
-    <div><label>Cena (Kč)</label><input id="cena" type="number" min="0" step="1" placeholder="180"/></div>
-    <div><label>Titulek</label><input id="title" type="text" placeholder="Titulek produktu"/></div>
-    <div style="grid-column:1/-1"><label>Popis</label><textarea id="popis" rows="4" placeholder="Krátký popis položky…"></textarea></div>
-    <div><label>Míra 1</label><input id="mira1" type="text" placeholder="Délka: 45 cm"/></div>
-    <div><label>Míra 2</label><input id="mira2" type="text" placeholder="Šířka: 33 cm"/></div>
-    <div><label>Míra 3</label><input id="mira3" type="text" placeholder="Rukáv: 42 cm"/></div>
-    <div><label>Míra 4</label><input id="mira4" type="text" placeholder="(volitelné)"/></div>
   </div>
-</section>
 
 <script>
 const stat=document.getElementById('stat');
@@ -121,7 +161,6 @@ function containDraw(bmp){
 
 function toMatFromBitmap(bmp){ const cnv=document.createElement('canvas'); cnv.width=bmp.width; cnv.height=bmp.height; cnv.getContext('2d').drawImage(bmp,0,0); return cv.imread(cnv); }
 
-// Improved A4 detection using aspect ratio ~ sqrt(2)
 function detectA4PxPerCm(mat){
   let gray=new cv.Mat(); cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
   let blur=new cv.Mat(); cv.GaussianBlur(gray, blur, new cv.Size(5,5), 0);
