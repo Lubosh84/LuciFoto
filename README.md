@@ -1,8 +1,8 @@
-# 📸 LuciFoto (fullpage)
-- Všechno na jedné stránce (bez výsuvného panelu)
-- Kategorie/barva ručně; velikosti: XS–XXL
-- Detekce A4 + ruční zadání délky
-- PWA (offline), vše v rootu
+# LuciFoto — no automatic measuring
+Verze bez automatického měření. Funkce:
+- Rozpoznání typu oblečení/bot pomocí MobileNet (client-side, TFJS).
+- Základní detekce barvy (průměrná barva mapovaná na základní názvy).
+- Ruční zadání měr (M1..M4), velikostí a popisu.
+- Export CSV připraveného pro Vinted (stáhneš a nahraješ ručně).
 
-## Nasazení
-Nahraj soubory do rootu repozitáře → zapni GitHub Pages (main / root) → hotovo.
+Nasazení: nahraj obsah ZIPu do rootu repozitáře a zapni GitHub Pages.

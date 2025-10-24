@@ -3,231 +3,202 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>LuciFoto</title>
+<title>LuciFoto — bez automatického měření</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#ff66b2"/>
 <link rel="icon" href="icon-192.png">
 <style>
-:root{--glass:rgba(255,255,255,.85);--line:rgba(0,0,0,.08);--accent:#ff66b2;--ink:#1e2329}
-*{box-sizing:border-box}
-html,body{height:100%}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;color:var(--ink);background:#ff66b2 url('background.jpg') center/cover no-repeat fixed;}
-.wrap{max-width:980px;margin:0 auto;padding:12px;display:grid;gap:12px}
-.card{background:var(--glass);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px;padding:14px}
-.header{display:flex;justify-content:space-between;align-items:center;gap:12px}
-h1{font-size:1.1rem;margin:0}
-.grid2{display:grid;gap:10px;grid-template-columns:1fr 1fr}
-@media(max-width:760px){.grid2{grid-template-columns:1fr}}
-label{font-size:.9rem;color:#374151}
-input,select,textarea{width:100%;background:#fff;border:1px solid #ffd0e6;border-radius:10px;padding:10px 12px;outline:none}
+:root{--accent:#ff66b2;--glass:rgba(255,255,255,.9);--line:rgba(0,0,0,.06);--ink:#1b1b1b}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#fff url('background.jpg') center/cover fixed;color:var(--ink)}
+.container{max-width:1000px;margin:12px auto;padding:12px;display:grid;gap:12px}
+.card{background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:12px}
+.header{display:flex;justify-content:space-between;align-items:center}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn{border:1px solid transparent;background:var(--accent);color:#fff;font-weight:700;border-radius:12px;padding:12px 14px;cursor:pointer}
-.btn.secondary{background:#fff;color:#111;border:1px solid #e5e7eb}.btn.ghost{background:transparent;color:#111;border:1px dashed #e5e7eb}
-canvas{width:100%;max-width:960px;height:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px}
-.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.badge{padding:4px 8px;border:1px solid #e5e7eb;border-radius:999px;background:#fff;font-size:.85rem;color:#374151}
+input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #ffd6ea;background:#fff}
+.btn{background:var(--accent);color:#fff;padding:10px 12px;border-radius:10px;border:0;cursor:pointer}
 .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.thumb{border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff}
-.thumb img{width:100%;display:block}
+.thumb img{width:100%;display:block;border-radius:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+.small{font-size:.9rem;color:#444}
 </style>
-<script>
-if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(console.error);});}
-</script>
-<script defer src="https://docs.opencv.org/4.x/opencv.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
 </head>
 <body>
-  <div class="wrap">
+  <div class="container">
     <div class="card header">
-      <h1>📸 LuciFoto</h1>
-      <div id="stat">Načítám moduly…</div>
+      <div style="font-weight:800">📸 LuciFoto — manuální měření</div>
+      <div id="status" class="small">Připraveno</div>
     </div>
 
     <div class="card">
-      <div class="actions" style="margin-bottom:10px">
-        <input id="files" type="file" accept="image/*" capture="environment" multiple/>
-        <button class="btn" id="processBtn">🪄 Zpracovat</button>
-        <button class="btn secondary" id="renderBtn">Vytvořit náhled</button>
-        <button class="btn ghost" id="downloadBtn">Stáhnout fotku</button>
-        <button class="btn ghost" id="exportCsvBtn">Export CSV (Vinted)</button>
+      <div class="actions">
+        <input id="file" type="file" accept="image/*" capture="environment"/>
+        <button id="classifyBtn" class="btn">Rozpoznat typ a barvu</button>
+        <button id="downloadBtn" class="btn" style="background:#fff;color:#111;border:1px solid var(--line)">Stáhnout náhled</button>
+        <button id="exportBtn" class="btn" style="background:transparent;color:#111;border:1px dashed var(--line)">Export CSV (Vinted)</button>
       </div>
-      <div class="gallery" id="gallery"></div>
-      <canvas id="canvas" width="1080" height="1080"></canvas>
-      <div class="badges">
-        <span class="badge" id="mBadgePx">Měřítko: –</span>
-        <span class="badge" id="mBadgeW">Šířka: –</span>
-        <span class="badge" id="mBadgeH">Výška: –</span>
-      </div>
+      <div style="margin-top:10px" id="gallery" class="gallery"></div>
+      <canvas id="preview" width="900" height="900" style="max-width:100%;border-radius:10px;margin-top:10px;background:#fff"></canvas>
     </div>
 
     <div class="card">
-      <div class="grid2">
-        <div>
-          <label>Reference měřítka</label>
-          <select id="scaleRef">
-            <option value="a4" selected>A4 list (29,7 × 21 cm)</option>
-            <option value="manual">Vlastní páska (zadám délku)</option>
-          </select>
-        </div>
-        <div id="manualLenWrap" style="display:none">
-          <label>Délka pásky (cm)</label>
-          <input id="manualLen" type="number" min="5" max="200" step="0.1" placeholder="30"/>
-        </div>
+      <div style="font-weight:700;margin-bottom:8px">Výsledky rozpoznání</div>
+      <div id="results" class="small">Nemáš nic nahrané.</div>
+    </div>
 
-        <div>
-          <label>Kategorie</label>
-          <select id="kategorie">
-            <option value="">— vyber —</option>
-            <option>tričko</option><option>mikina</option><option>svetr</option><option>bunda</option>
-            <option>kalhoty</option><option>kraťasy</option><option>sukně</option><option>šaty</option><option>boty</option><option>doplněk</option>
-          </select>
-        </div>
-        <div>
-          <label>Barva</label>
-          <select id="barva">
-            <option value="">— vyber —</option>
-            <option>bílá</option><option>černá</option><option>šedá</option><option>modrá</option><option>červená</option><option>růžová</option>
-            <option>zelená</option><option>béžová</option><option>hnědá</option><option>žlutá</option><option>fialová</option><option>vícebarevná</option>
-          </select>
-        </div>
+    <div class="card">
+      <div style="font-weight:700">Ručně doplňte míry a další údaje</div>
+      <div class="grid2" style="margin-top:8px">
+        <div><label>Typ (upravit)</label><select id="typ"><option value="">— vyber —</option><option>tričko</option><option>mikina</option><option>svetr</option><option>bunda</option><option>kalhoty</option><option>sukně</option><option>šaty</option><option>boty</option><option>doplněk</option></select></div>
+        <div><label>Barva (upravit)</label><select id="barva"><option value="">— vyber —</option><option>bílá</option><option>černá</option><option>šedá</option><option>modrá</option><option>červená</option><option>růžová</option><option>zelená</option><option>béžová</option><option>hnědá</option><option>žlutá</option><option>fialová</option><option>vícebarevná</option></select></div>
+        <div><label>Velikost (oblečení)</label><select id="velikostCloth"><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>XXXL</option></select></div>
+        <div><label>Velikost (boty)</label><select id="velikostShoes"></select></div>
+      </div>
 
-        <div>
-          <label>Velikost</label>
-          <select id="velikost">
-            <option>XS</option><option>S</option><option selected>M</option><option>L</option><option>XL</option><option>XXL</option>
-          </select>
-        </div>
-        <div>
-          <label>Pohlaví</label>
-          <select id="gender">
-            <option value="">— vyber —</option><option>Dámské</option><option>Pánské</option><option>Dětské</option>
-          </select>
-        </div>
+      <div style="margin-top:10px">
+        <label>Titulek</label>
+        <input id="title" placeholder="Titulek položky"/>
+      </div>
+      <div style="margin-top:10px">
+        <label>Popis</label>
+        <textarea id="desc" rows="4" placeholder="Popis…"></textarea>
+      </div>
 
-        <div>
-          <label>Stav</label>
-          <select id="stav">
-            <option>Nové</option><option>Jako nové</option><option selected>Velmi dobrý</option><option>Dobrý</option><option>Uspokojivý</option>
-          </select>
-        </div>
-        <div>
-          <label>Cena (Kč)</label>
-          <input id="cena" type="number" min="0" step="1" placeholder="180"/>
-        </div>
-
-        <div>
-          <label>Titulek</label>
-          <input id="title" type="text" placeholder="Titulek produktu"/>
-        </div>
-        <div style="grid-column:1 / -1">
-          <label>Popis</label>
-          <textarea id="popis" rows="4" placeholder="Krátký popis položky…"></textarea>
-        </div>
-
-        <div><label>Míra 1</label><input id="mira1" type="text" placeholder="Délka: 45 cm"/></div>
-        <div><label>Míra 2</label><input id="mira2" type="text" placeholder="Šířka: 33 cm"/></div>
-        <div><label>Míra 3</label><input id="mira3" type="text" placeholder="Rukáv: 42 cm"/></div>
-        <div><label>Míra 4</label><input id="mira4" type="text" placeholder="(volitelné)"/></div>
+      <div style="margin-top:10px" class="small">Míry (zadej ručně)</div>
+      <div class="grid2" style="margin-top:8px">
+        <div><input id="m1" placeholder="Délka (cm)"/></div>
+        <div><input id="m2" placeholder="Šířka (cm)"/></div>
+        <div><input id="m3" placeholder="Rukáv / obvod (cm)"/></div>
+        <div><input id="m4" placeholder="Další (cm)"/></div>
+      </div>
+      <div style="margin-top:10px" class="actions">
+        <button id="uploadBtn" class="btn">Nahrát na Vinted (Export)</button>
       </div>
     </div>
   </div>
 
 <script>
-const stat=document.getElementById('stat');
-window.addEventListener('load',()=>{function wait(){if(typeof cv!=='undefined'){stat.textContent='Připraveno';}else setTimeout(wait,300);}wait();});
+let net=null;
+const status=document.getElementById('status');
+const fileEl=document.getElementById('file');
+const gallery=document.getElementById('gallery');
+const preview=document.getElementById('preview');
+const ctx=preview.getContext('2d');
+const resultsEl=document.getElementById('results');
+const typSel=document.getElementById('typ');
+const barvaSel=document.getElementById('barva');
+const sizeShoes=document.getElementById('velikostShoes');
 
-const scaleRef=document.getElementById('scaleRef'), manualLenWrap=document.getElementById('manualLenWrap');
-scaleRef.addEventListener('change',()=>{ manualLenWrap.style.display=(scaleRef.value==='manual')?'block':'none'; });
+for(let s=36;s<=46;s++){ const o=document.createElement('option'); o.textContent=s; o.value=s; sizeShoes.appendChild(o); }
 
-const filesEl=document.getElementById('files'), gallery=document.getElementById('gallery'), canvas=document.getElementById('canvas'), ctx=canvas.getContext('2d');
+async function loadModel(){
+  status.textContent='Načítám model MobileNet…';
+  try{
+    net = await mobilenet.load();
+    status.textContent='Model připraven.';
+  }catch(e){
+    status.textContent='Chyba načtení modelu.';
+    console.error(e);
+  }
+}
+loadModel();
 
-filesEl.addEventListener('change', async (e)=>{
+fileEl.addEventListener('change', async (e)=>{
   gallery.innerHTML='';
-  for(const f of e.target.files){
-    const url=URL.createObjectURL(f);
-    const d=document.createElement('div'); d.className='thumb'; d.innerHTML='<img src="'+url+'">'; gallery.appendChild(d);
+  const f = e.target.files[0];
+  if(!f) return;
+  const url = URL.createObjectURL(f);
+  const d=document.createElement('div'); d.className='thumb'; d.innerHTML='<img src="'+url+'">'; gallery.appendChild(d);
+
+  const img = new Image();
+  img.onload = ()=>{
+    const W=900, H=900;
+    const r = Math.min(W/img.width, H/img.height);
+    const w=Math.round(img.width*r), h=Math.round(img.height*r);
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+    ctx.drawImage(img, (W-w)/2, (H-h)/2, w, h);
+  }
+  img.src = url;
+});
+
+function detectBasicColor(canvasCtx, w=900, h=900){
+  const imgData = canvasCtx.getImageData(0,0,w,h);
+  let r=0,g=0,b=0,c=0;
+  for(let i=0;i<imgData.data.length;i+=40){ r+=imgData.data[i]; g+=imgData.data[i+1]; b+=imgData.data[i+2]; c++; }
+  r=Math.round(r/c); g=Math.round(g/c); b=Math.round(b/c);
+  const colors = {'bílá':[255,255,255],'černá':[20,20,20],'šedá':[128,128,128],'modrá':[30,90,180],'červená':[190,30,45],'růžová':[255,102,178],'zelená':[40,140,40],'béžová':[210,180,140],'hnědá':[120,70,20],'žlutá':[240,200,40],'fialová':[140,60,170]};
+  let best=null, bd=1e9;
+  for(const k in colors){
+    const [cr,cg,cb]=colors[k];
+    const d = (r-cr)*(r-cr)+(g-cg)*(g-cg)+(b-cb)*(b-cb);
+    if(d<bd){bd=d; best=k;}
+  }
+  if(bd>7000) return 'vícebarevná';
+  return best;
+}
+
+function mapLabelToCategory(label){
+  label = label.toLowerCase();
+  const mapping = [
+    {k:['t-shirt','tshirt','jersey','sweatshirt','polo','shirt','top'],'v':'tričko'},
+    {k:['jacket','coat','blazer','parka','overcoat'],'v':'bunda'},
+    {k:['dress','gown'],'v':'šaty'},
+    {k:['trouser','jeans','jean','pants','chino'],'v':'kalhoty'},
+    {k:['skirt'],'v':'sukně'},
+    {k:['shoe','boot','sneaker','loafer','sandals','sandal'],'v':'boty'},
+    {k:['bag','handbag','purse'],'v':'doplněk'}
+  ];
+  for(const m of mapping){
+    for(const key of m.k) if(label.includes(key)) return m.v;
+  }
+  return 'doplňte';
+}
+
+document.getElementById('classifyBtn').addEventListener('click', async ()=>{
+  if(!fileEl.files.length){ alert('Nahraj foto.'); return; }
+  if(!net){ alert('Model se načítá, chvíli počkej.'); return; }
+  const img = new Image();
+  img.src = URL.createObjectURL(fileEl.files[0]);
+  img.onload = async ()=>{
+    const res = await net.classify(img);
+    const top = res && res[0] ? res[0].className : '---';
+    const cat = mapLabelToCategory(top);
+    const color = detectBasicColor(ctx,900,900);
+    resultsEl.innerHTML = '<b>Výsledek (automatický návrh):</b><br>Label: '+top+'<br>Kategorie: '+cat+'<br>Barva: '+color;
+    if(cat && cat!=='doplňte') typSel.value = cat;
+    if(color) barvaSel.value = color;
+    document.getElementById('title').value = (cat!=='doplňte'?cat+' ':'') + (color? (color+' '):'') + '— přidej titulek';
+    document.getElementById('desc').value = 'Rozpoznáno: '+top+'; Doporučená kategorie: '+cat+'; Barva: '+color;
   }
 });
 
-function containDraw(bmp){
-  ctx.fillStyle='#fff'; ctx.fillRect(0,0,1080,1080);
-  const r=Math.min(1080/bmp.width,1080/bmp.height);
-  const w=Math.round(bmp.width*r), h=Math.round(bmp.height*r);
-  const x=Math.floor((1080-w)/2), y=Math.floor((1080-h)/2);
-  ctx.drawImage(bmp,x,y,w,h);
-  const pad=18; ctx.save(); ctx.font='600 26px system-ui, Segoe UI, Roboto, Arial'; ctx.fillStyle='rgba(0,0,0,0.18)';
-  const t='📸 LuciFoto'; const m=ctx.measureText(t); ctx.fillText(t,1080-pad-m.width,1080-pad); ctx.restore();
-}
-
-function toMatFromBitmap(bmp){ const cnv=document.createElement('canvas'); cnv.width=bmp.width; cnv.height=bmp.height; cnv.getContext('2d').drawImage(bmp,0,0); return cv.imread(cnv); }
-
-function detectA4PxPerCm(mat){
-  let gray=new cv.Mat(); cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
-  let blur=new cv.Mat(); cv.GaussianBlur(gray, blur, new cv.Size(5,5), 0);
-  let edges=new cv.Mat(); cv.Canny(blur, edges, 60, 160);
-  let contours=new cv.MatVector(); let hierarchy=new cv.Mat();
-  cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-  let best=null; let bestArea=0; const target=Math.SQRT2;
-  for(let i=0;i<contours.size();i++){
-    const cnt=contours.get(i); const area=cv.contourArea(cnt);
-    if(area < (mat.rows*mat.cols*0.02)) continue;
-    let approx=new cv.Mat(); cv.approxPolyDP(cnt, approx, 0.02*cv.arcLength(cnt,true), true);
-    if(approx.rows===4){
-      let xs=[],ys=[]; for(let j=0;j<4;j++){ xs.push(approx.data32S[j*2]); ys.push(approx.data32S[j*2+1]); }
-      const minx=Math.min(...xs), maxx=Math.max(...xs), miny=Math.min(...ys), maxy=Math.max(...ys);
-      const w=maxx-minx, h=maxy-miny; const ar=(w>h?w/h:h/w);
-      if(Math.abs(ar-target) < 0.35 && area>bestArea){ bestArea=area; best={w,h}; }
-    }
-    approx.delete();
-  }
-  gray.delete(); blur.delete(); edges.delete(); contours.delete(); hierarchy.delete();
-  if(!best) return null;
-  const longPx=Math.max(best.w,best.h);
-  return longPx/29.7;
-}
-
-async function processImage(){
-  if(!filesEl.files.length){ alert('Nahraj fotku.'); return; }
-  const bmp=await createImageBitmap(filesEl.files[0]);
-  let pxPerCm=null;
-  if(scaleRef.value==='a4'){
-    try{ let mat=toMatFromBitmap(bmp); pxPerCm=detectA4PxPerCm(mat); mat.delete(); }catch(e){ pxPerCm=null; }
-    if(!pxPerCm){ alert('A4 nebyl spolehlivě rozpoznán. Přepínám na ruční zadání.'); scaleRef.value='manual'; manualLenWrap.style.display='block'; return; }
-  }else{
-    const len=parseFloat(document.getElementById('manualLen').value||'0');
-    if(len<=0){ alert('Zadej délku v cm (např. 30).'); return; }
-    pxPerCm = (bmp.width/len);
-  }
-  containDraw(bmp);
-  const wcm=(bmp.width/pxPerCm), hcm=(bmp.height/pxPerCm);
-  document.getElementById('mBadgePx').textContent='Měřítko: '+pxPerCm.toFixed(2)+' px/cm';
-  document.getElementById('mBadgeW').textContent='Šířka: '+wcm.toFixed(1)+' cm';
-  document.getElementById('mBadgeH').textContent='Výška: '+hcm.toFixed(1)+' cm';
-
-  const vel=document.getElementById('velikost').value;
-  const bar=document.getElementById('barva').value;
-  document.getElementById('title').value = (bar? (bar+' ') : '') + (vel? ('• '+vel) : '');
-  const parts=['Velikost: '+vel, 'Míry: délka '+hcm.toFixed(1)+' cm, šířka '+wcm.toFixed(1)+' cm'];
-  if(bar) parts.push('Barva: '+bar);
-  parts.push('Stav: '+document.getElementById('stav').value);
-  document.getElementById('popis').value = parts.join('\n');
-}
-
-document.getElementById('processBtn').addEventListener('click', processImage);
-document.getElementById('renderBtn').addEventListener('click', async ()=>{
-  if(!filesEl.files.length){ alert('Nahraj fotku.'); return; }
-  const bmp=await createImageBitmap(filesEl.files[0]); containDraw(bmp); alert('Náhled hotový.');
-});
 document.getElementById('downloadBtn').addEventListener('click', ()=>{
-  const c=document.getElementById('canvas');
-  c.toBlob(b=>{ const a=document.createElement('a'); const url=URL.createObjectURL(b); a.href=url; a.download='lucifoto.jpg'; a.click(); URL.revokeObjectURL(url); }, 'image/jpeg', 0.92);
+  preview.toBlob(b=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='lucifoto_preview.jpg'; a.click(); URL.revokeObjectURL(a.href); },'image/jpeg',0.9);
 });
-function toCSVRow(v){ return v.map(x=>'"'+String(x).replaceAll('"','""')+'"').join(','); }
-document.getElementById('exportCsvBtn').addEventListener('click', ()=>{
-  const row=[document.getElementById('title').value,document.getElementById('popis').value,document.getElementById('cena').value,document.getElementById('kategorie').value,document.getElementById('velikost').value,document.getElementById('stav').value,document.getElementById('gender').value,document.getElementById('barva').value];
-  const header=['Titulek','Popis','CenaKc','Kategorie','Velikost','Stav','Pohlavi','Barva'];
-  const csv=[toCSVRow(header),toCSVRow(row)].join('\n');
-  const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); const url=URL.createObjectURL(blob); a.href=url; a.download='lucifoto_vinted.csv'; a.click(); URL.revokeObjectURL(url);
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const fields = [
+    document.getElementById('title').value,
+    document.getElementById('desc').value,
+    document.getElementById('typ').value,
+    document.getElementById('velikostCloth').value,
+    document.getElementById('velikostShoes').value,
+    document.getElementById('barva').value,
+    document.getElementById('m1').value,
+    document.getElementById('m2').value,
+    document.getElementById('m3').value,
+    document.getElementById('m4').value
+  ];
+  const header = ['Titulek','Popis','Kategorie','Velikost_obleč','Velikost_boty','Barva','M1','M2','M3','M4'];
+  const csv = [header.join(','), fields.map(f => '"'+String(f).replace(/"/g,'""')+'"').join(',')].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='lucifoto_vinted.csv'; a.click(); URL.revokeObjectURL(a.href);
+});
+
+document.getElementById('uploadBtn').addEventListener('click', ()=>{
+  alert('CSV vytvořeno. Stáhni CSV a nahraj do Vinted ručně. (Automatické nahrávání na Vinted by vyžadovalo jejich API a přihlášení.)');
 });
 </script>
 </body>
